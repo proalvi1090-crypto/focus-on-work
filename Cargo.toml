@@ -3,6 +3,7 @@ members = [
     "focus-on-work-core",
     "focus-on-work-daemon",
     "focus-on-work-cli",
+    "focus-on-work-gui",
 ]
 resolver = "2"
 

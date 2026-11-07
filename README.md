@@ -3,8 +3,8 @@
 `focus-on-work` is a lightweight Linux app that blocks user-selected websites
 and applications for a chosen duration, then unblocks them automatically.
 
-The project is split into a core library, a root-owned daemon, and a command
-line client. The graphical interface will be added later.
+The project is split into a core library, a root-owned daemon, a command line
+client, and a Slint desktop GUI.
 
 ## Daemon
 
@@ -72,6 +72,33 @@ sites/apps. `stop` is intentionally refused while a session is active; the
 daemon removes blocks when the timer expires. Set `FOW_SOCKET_PATH` or pass
 `--socket` to use a non-default daemon socket. The CLI reports a friendly
 error if the daemon is not running or the socket cannot be reached.
+
+## Slint GUI
+
+The GUI is the `focus-on-work-gui` workspace member. Build and run it with:
+
+```sh
+cargo run -p focus-on-work-gui
+```
+
+It connects to `/run/focus-on-work.sock` by default. For local testing, point
+both processes at the same temporary socket:
+
+```sh
+FOW_SOCKET_PATH=/tmp/focus-on-work/daemon.sock cargo run -p focus-on-work-gui
+```
+
+The GUI sends newline-delimited JSON `Start` and `Status` requests, polls
+status once per second, and displays the daemon's authoritative session
+expiry. `FOW_GUI_CONFIG` changes the JSON import/export path. Closing the
+window hides it and sends a desktop notification; the daemon continues
+enforcing an active session.
+
+`deny.toml` permits only MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, and
+CC0-1.0 dependency licenses and denies copyleft licenses. Run
+`cargo deny check licenses` in CI after installing `cargo-deny`; Slint's own
+licensing terms should also be reviewed against the project's Commons Clause
+policy before distributing binaries.
 
 ## Limitations
 
