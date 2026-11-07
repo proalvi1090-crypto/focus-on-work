@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "focus-on-work-core",
+    "focus-on-work-daemon",
+    "focus-on-work-cli",
+]
+resolver = "2"
