@@ -1,6 +1,6 @@
-MIT License
+MIT License with Commons Clause
 
-Copyright (c) 2026 focus-on-work contributors
+Copyright (c) 2026 Kamran Ahmed Alvi (proalvi1090-crypto)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +19,31 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Commons Clause License Condition
+
+The Software and the work of authorship embodied therein may not be used by
+any person or entity for the purpose of making a product or service available
+to others (other than the licensee) that includes the Software or a modified
+version of the Software, or that is substantially similar to the Software,
+if the product or service is sold, offered for sale, or otherwise made
+available for a fee or other commercial consideration.
+
+For purposes of this condition, "Sell" means to use the Software, or a
+modified version of the Software, to provide a product or service to third
+parties for a fee or other commercial consideration. This includes selling
+the Software itself, incorporating it into commercial software, offering paid
+hosting or managed services based on it, or using it to operate a commercial
+business.
+
+The Software may be used, copied, modified, and distributed without charge
+for personal, educational, research, and other non-commercial purposes,
+provided that this copyright notice, the MIT License, and this condition are
+retained.
+
+Any use restricted by this condition requires prior written permission from
+the copyright holder, Kamran Ahmed Alvi (proalvi1090-crypto).
+
+This additional condition is not part of the standard MIT License. As a
+result, this license is source-available but is not an OSI-approved Open
+Source license.

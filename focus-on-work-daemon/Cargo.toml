@@ -2,6 +2,7 @@
 name = "focus-on-work-daemon"
 version = "0.1.0"
 edition = "2024"
+license-file.workspace = true
 
 [dependencies]
 focus-on-work-core = { path = "../focus-on-work-core" }

@@ -5,3 +5,6 @@ members = [
     "focus-on-work-cli",
 ]
 resolver = "2"
+
+[workspace.package]
+license-file = "LICENSE"

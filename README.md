@@ -99,4 +99,20 @@ In another terminal, run the three CLI commands with
 file, send SIGTERM to the daemon, and confirm the active block remains. Test
 expiry with a short duration such as `1m`. Do not test against a production
 machine until the service unit's permissions and hardening have been reviewed.
+
+## License
+
+This project is source-available under the MIT License with an additional
+Commons Clause condition. You may read, learn from, copy, modify, and use it
+for personal, educational, research, and other non-commercial purposes.
+
+You may not sell the software, include it in commercial software, offer paid
+hosting or services based on it, or use it for a commercial business without
+prior written permission from Kamran Ahmed Alvi (proalvi1090-crypto). The
+copyright notice and complete license text must remain with copies or
+substantial portions of the software.
+
+Because commercial use is restricted, this is source-available and is not an
+OSI-approved Open Source license. Consult a qualified lawyer before relying on
+this custom license for commercial or redistribution decisions.
 # focus-on-work
