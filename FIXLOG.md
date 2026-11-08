@@ -19,7 +19,8 @@
   `libc::chown` call and unused libc dependency were removed; repository checks
   passed after this item.
 - Unverified: real systemd ownership and an actual in-group/out-of-group
-  client test require the manual script in a VM.
+  client test require `sudo scripts/verify-socket.sh IN_GROUP_USER
+  NOT_IN_GROUP_USER` in a VM after logging in again.
 
 ## 4. Process matching
 

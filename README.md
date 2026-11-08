@@ -113,7 +113,7 @@ unlocked.
 - Hosts-file blocking cannot wildcard subdomains and can be bypassed by
   browsers using DNS-over-HTTPS.
 - Snap/Flatpak process naming is untested.
-- - The installer creates the `focus-on-work` group. Users must join it
+- The installer creates the `focus-on-work` group. Users must join it
   (`sudo usermod -aG focus-on-work USER`) and log in again before using the
   socket without sudo. Users outside the group are denied.
 - A root user can always undo the hosts or process block.
