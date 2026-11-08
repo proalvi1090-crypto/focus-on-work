@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use focus_on_work_core::hosts;
+use focus_on_work_core::process;
 use focus_on_work_core::session::Session;
 use serde::{Deserialize, Serialize};
 
@@ -85,7 +86,7 @@ fn run() -> Result<(), String> {
         } => Request::Start {
             duration,
             sites: split_entries(sites, "site")?,
-            apps: split_entries(apps, "app")?,
+            apps: split_apps(apps)?,
         },
         Command::Status => Request::Status,
         Command::Stop => Request::Stop,
@@ -113,7 +114,14 @@ fn split_entries(entries: Vec<String>, kind: &str) -> Result<Vec<String>, String
     if entries.iter().any(String::is_empty) {
         return Err(format!("{kind} list contains an empty entry"));
     }
+
     Ok(entries)
+}
+
+fn split_apps(entries: Vec<String>) -> Result<Vec<String>, String> {
+    let apps = split_entries(entries, "app")?;
+    process::validate_app_entries(&apps)?;
+    Ok(apps)
 }
 
 fn send_request(socket: &PathBuf, request: Request) -> Result<Response, String> {

@@ -294,13 +294,10 @@ fn handle_request(request: Request, config: &Config, current: &mut Option<Sessio
                     };
                 }
             };
-            if apps
-                .iter()
-                .any(|app| app.is_empty() || app.len() > 255 || app.chars().any(|c| c.is_control()))
-            {
+            if let Err(error) = process::validate_app_entries(&apps) {
                 return Response {
                     ok: false,
-                    error: Some("invalid app entry".into()),
+                    error: Some(error),
                     session: None,
                 };
             }

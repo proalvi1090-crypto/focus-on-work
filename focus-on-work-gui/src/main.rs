@@ -5,6 +5,7 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use focus_on_work_core::process;
 use focus_on_work_core::session::Session;
 use notify_rust::Notification;
 use serde::{Deserialize, Serialize};
@@ -127,6 +128,13 @@ fn create_tray() -> Result<(TrayIcon, MenuId, MenuId), Box<dyn std::error::Error
     Ok((tray, show_menu_id, quit_menu_id))
 }
 
+fn start_request_apps(request: &Request) -> Vec<String> {
+    match request {
+        Request::Start { apps, .. } => apps.clone(),
+        Request::Status => Vec::new(),
+    }
+}
+
 fn install_callbacks(ui: &AppWindow, socket: PathBuf, config_path: PathBuf) {
     let start_weak = ui.as_weak();
     let start_socket = socket.clone();
@@ -148,6 +156,10 @@ fn install_callbacks(ui: &AppWindow, socket: PathBuf, config_path: PathBuf) {
                     ui.get_custom_apps().as_str(),
                 ),
             };
+            if let Err(error) = process::validate_app_entries(&start_request_apps(&start_request)) {
+                ui.set_status_text(error.into());
+                return;
+            }
             match request(&start_socket, start_request) {
                 Ok(response) if response.ok => {
                     ui.set_status_text("Focus session started".into());
@@ -157,6 +169,7 @@ fn install_callbacks(ui: &AppWindow, socket: PathBuf, config_path: PathBuf) {
                         .show();
                     update_status(&ui, response.session);
                 }
+
                 Ok(response) => ui.set_status_text(
                     response
                         .error
