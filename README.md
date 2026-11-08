@@ -32,7 +32,7 @@ expires.
 
 ## Install
 
-On a Linux system with Rust and systemd:
+On a Linux system with Rust 1.92 or newer and systemd:
 
 ```sh
 sudo ./install.sh

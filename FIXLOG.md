@@ -82,3 +82,14 @@
 - Tests added: none
 - How verified: the workspace has only the root `Cargo.lock`; repository checks passed after removal.
 - Unverified: none.
+
+## 10. Minimum Rust version
+
+- Status: DONE
+- Files changed: all workspace `Cargo.toml` manifests and `README.md`
+- Tests added: none
+- How verified: the locked dependency graph reports Rust 1.92 as its highest
+  minimum requirement, from Slint 1.18.1. Every package declares
+  `rust-version = 1.92`; repository checks passed after this change.
+- Unverified: building with an actual Rust 1.92 toolchain was not available in
+  this environment.
