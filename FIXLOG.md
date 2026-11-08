@@ -93,3 +93,13 @@
   `rust-version = 1.92`; repository checks passed after this change.
 - Unverified: building with an actual Rust 1.92 toolchain was not available in
   this environment.
+
+## 11. Hosts backup refresh
+
+- Status: DONE
+- Files changed: `focus-on-work-core/src/hosts.rs`, `FIXLOG.md`
+- Tests added: backup refresh after a user edit
+- How verified: when no managed block is present, `.bak` is now refreshed only
+  when its bytes differ from the current hosts file; existing-block updates
+  still preserve the backup. Focused and workspace Rust checks passed.
+- Unverified: none for temporary-file behavior.

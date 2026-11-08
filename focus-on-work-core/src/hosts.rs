@@ -94,7 +94,12 @@ pub fn apply_block(path: &Path, domains: &[Domain]) -> Result<(), Error> {
     let has_existing_block = start.is_some() && end.is_some();
     if !has_existing_block {
         let backup = backup_path(path);
-        if !backup.exists() {
+        let refresh_backup = match fs::read(&backup) {
+            Ok(contents) => contents != original,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => true,
+            Err(error) => return Err(error.into()),
+        };
+        if refresh_backup {
             fs::copy(path, backup)?;
         }
     }
@@ -401,6 +406,23 @@ mod tests {
         assert_eq!(
             fs::read_to_string(path.with_extension("bak")).expect("backup"),
             "before\n"
+        );
+    }
+
+    #[test]
+    fn refreshes_backup_after_user_changes_unmanaged_file() {
+        let directory = tempdir().expect("tempdir");
+        let path = directory.path().join("hosts");
+        fs::write(&path, "before\n").expect("write");
+        apply_block(&path, &[domain("old.example")]).expect("apply");
+        remove_block(&path).expect("remove");
+        fs::write(&path, "user edit\n").expect("edit");
+
+        apply_block(&path, &[domain("new.example")]).expect("apply again");
+
+        assert_eq!(
+            fs::read_to_string(path.with_extension("bak")).expect("backup"),
+            "user edit\n"
         );
     }
 }
