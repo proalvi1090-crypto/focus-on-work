@@ -6,6 +6,7 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
@@ -18,6 +19,8 @@ use serde::{Deserialize, Serialize};
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::flag;
 use tracing::{info, warn};
+
+const MAX_CLIENT_THREADS: usize = 32;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
@@ -144,17 +147,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let accept_config = config.clone();
     let accept_current = Arc::clone(&current);
     let accept_stopping = Arc::clone(&stopping);
+    let active_clients = Arc::new(AtomicUsize::new(0));
+    let accept_active_clients = Arc::clone(&active_clients);
     thread::spawn(move || {
         while !accept_stopping.load(Ordering::Relaxed) {
             match listener.accept() {
                 Ok((stream, _)) => {
+                    if !try_acquire_client(&accept_active_clients) {
+                        warn!("client thread limit reached; refusing connection");
+                        continue;
+                    }
                     let config = accept_config.clone();
                     let current = Arc::clone(&accept_current);
-                    thread::spawn(move || {
+                    let active_clients = Arc::clone(&accept_active_clients);
+                    if let Err(error) = thread::Builder::new().spawn(move || {
+                        let _client_guard = ClientGuard::new(active_clients);
                         if let Err(error) = handle_client(stream, &config, &current) {
                             warn!(%error, "client request failed");
                         }
-                    });
+                    }) {
+                        warn!(%error, "could not spawn client thread");
+                        ClientGuard::release(&accept_active_clients);
+                    }
                 }
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
                     thread::sleep(Duration::from_millis(50));
@@ -166,10 +180,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("daemon started");
     let mut process_terminator = process::ProcessTerminator::new();
     while !stopping.load(Ordering::Relaxed) {
-        let mut state = current
-            .lock()
-            .map_err(|_| io::Error::other("state lock poisoned"))?;
-        if let Some(active) = state.as_ref() {
+        let active = lock_current(&current).clone();
+        if let Some(active) = active {
             if !hosts::is_block_present(&config.hosts, &active.sites).unwrap_or(false)
                 && let Err(error) = hosts::repair_block(&config.hosts, &active.sites)
             {
@@ -183,16 +195,68 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Err(error) = session::clear(&config.state) {
                     warn!(%error, "could not clear expired state");
                 }
-                *state = None;
+                let mut state = lock_current(&current);
+                if state.as_ref() == Some(&active) {
+                    *state = None;
+                }
                 info!("session expired");
             }
         }
-        drop(state);
         thread::sleep(Duration::from_secs(2));
     }
     info!("daemon stopping; active hosts block remains in place");
     let _ = fs::remove_file(&config.socket);
     Ok(())
+}
+
+fn lock_current(
+    current: &Arc<Mutex<Option<Session>>>,
+) -> std::sync::MutexGuard<'_, Option<Session>> {
+    match current.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            warn!("state lock was poisoned; recovering its contents");
+            poisoned.into_inner()
+        }
+    }
+}
+
+fn try_acquire_client(active_clients: &AtomicUsize) -> bool {
+    let mut count = active_clients.load(Ordering::Acquire);
+    loop {
+        if count >= MAX_CLIENT_THREADS {
+            return false;
+        }
+        match active_clients.compare_exchange_weak(
+            count,
+            count + 1,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => return true,
+            Err(updated) => count = updated,
+        }
+    }
+}
+
+struct ClientGuard {
+    active_clients: Arc<AtomicUsize>,
+}
+
+impl ClientGuard {
+    fn new(active_clients: Arc<AtomicUsize>) -> Self {
+        Self { active_clients }
+    }
+
+    fn release(active_clients: &AtomicUsize) {
+        active_clients.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+impl Drop for ClientGuard {
+    fn drop(&mut self) {
+        Self::release(&self.active_clients);
+    }
 }
 
 fn handle_client(
@@ -204,9 +268,7 @@ fn handle_client(
     stream.set_write_timeout(Some(Duration::from_secs(2)))?;
     let mut line = String::new();
     BufReader::new(stream.try_clone()?).read_line(&mut line)?;
-    let mut current = current
-        .lock()
-        .map_err(|_| io::Error::other("state lock poisoned"))?;
+    let mut current = lock_current(current);
     let response = match serde_json::from_str::<Request>(&line) {
         Ok(request) => handle_request(request, config, &mut current),
         Err(error) => Response {
@@ -241,6 +303,7 @@ fn handle_request(request: Request, config: &Config, current: &mut Option<Sessio
                 session: None,
             }
         }
+
         Request::Start {
             duration: duration_text,
             sites,
@@ -306,5 +369,21 @@ fn handle_request(request: Request, config: &Config, current: &mut Option<Sessio
                 session: Some(session),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn caps_client_threads_and_allows_reuse_after_release() {
+        let active = AtomicUsize::new(0);
+        for _ in 0..MAX_CLIENT_THREADS {
+            assert!(try_acquire_client(&active));
+        }
+        assert!(!try_acquire_client(&active));
+        ClientGuard::release(&active);
+        assert!(try_acquire_client(&active));
     }
 }

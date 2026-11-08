@@ -113,3 +113,16 @@
   their original endings to LF and preserves the original final newline.
   Workspace formatting, clippy, and tests passed.
 - Unverified: none for the covered temporary-file cases.
+
+## 13. Daemon client and state robustness
+
+- Status: DONE
+- Files changed: `focus-on-work-daemon/src/main.rs`, `FIXLOG.md`
+- Tests added: client-thread cap and slot reuse unit test
+- How verified: at most 32 client handlers can be active; excess connections
+  are dropped with a warning. The guard loop clones the active session before
+  hosts/process work, so process scans no longer hold the state mutex. Poisoned
+  state locks recover their contents instead of terminating the daemon.
+  Formatting, clippy, and all workspace tests passed.
+- Unverified: real high-volume connection pressure and mutex poisoning caused
+  by a production panic need a VM/manual stress run.
