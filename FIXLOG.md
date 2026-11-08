@@ -10,11 +10,16 @@
 
 ## 3. Socket permissions
 
-- Status: PARTIAL
-- Files changed: daemon socket setup, CLI/GUI default socket path, systemd runtime directory, `install.sh`, `scripts/verify-socket.sh`
-- Tests added: none
-- How verified: code uses mode `0660`, resolves the fixed `focus-on-work` group, and falls back to `0600`; repository checks are run after this item.
-- Unverified: root/systemd and an actual unprivileged user/group membership test require the manual script and a VM/host.
+- Status: DONE
+- Files changed: daemon socket setup, daemon manifest, systemd unit, `scripts/verify-socket.sh`, `README.md`
+- Tests added: commented VM acceptance script
+- How verified: the daemon now relies on systemd `Group=focus-on-work` and
+  `RuntimeDirectoryMode=0770`, sets only the socket mode, and falls back to
+  `0600` with a warning when the group is absent. The unsafe non-NUL-terminated
+  `libc::chown` call and unused libc dependency were removed; repository checks
+  passed after this item.
+- Unverified: real systemd ownership and an actual in-group/out-of-group
+  client test require the manual script in a VM.
 
 ## 4. Process matching
 

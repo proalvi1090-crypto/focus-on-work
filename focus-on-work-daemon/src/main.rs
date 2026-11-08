@@ -1,7 +1,6 @@
 use std::env;
 use std::fs;
 use std::io::{self, BufRead, BufReader, Write};
-use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
@@ -86,15 +85,12 @@ impl Config {
 }
 
 fn set_socket_permissions(socket: &std::path::Path) {
-    let group_id = fs::read_to_string("/etc/group").ok().and_then(|groups| {
-        groups.lines().find_map(|line| {
-            let mut fields = line.split(':');
-            (fields.next() == Some("focus-on-work"))
-                .then(|| fields.nth(1)?.parse::<u32>().ok())
-                .flatten()
-        })
+    let group_exists = fs::read_to_string("/etc/group").ok().is_some_and(|groups| {
+        groups
+            .lines()
+            .any(|line| line.starts_with("focus-on-work:"))
     });
-    let Some(group_id) = group_id else {
+    if !group_exists {
         warn!("group focus-on-work is unavailable; using root-only socket permissions");
         if let Err(error) = fs::set_permissions(socket, fs::Permissions::from_mode(0o600)) {
             warn!(%error, "could not set root-only socket permissions");
@@ -103,20 +99,6 @@ fn set_socket_permissions(socket: &std::path::Path) {
     };
     if let Err(error) = fs::set_permissions(socket, fs::Permissions::from_mode(0o660)) {
         warn!(%error, "could not set socket permissions");
-        return;
-    }
-    // The daemon is root-owned; changing only the group does not require
-    // trusting any client-provided path or command.
-    let result = unsafe {
-        libc::chown(
-            socket.as_os_str().as_bytes().as_ptr().cast(),
-            u32::MAX,
-            group_id,
-        )
-    };
-    if result != 0 {
-        warn!(error = %io::Error::last_os_error(), "could not set socket group; using root-only permissions");
-        let _ = fs::set_permissions(socket, fs::Permissions::from_mode(0o600));
     }
 }
 

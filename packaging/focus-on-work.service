@@ -5,6 +5,7 @@ After=local-fs.target
 [Service]
 Type=simple
 User=root
+Group=focus-on-work
 ExecStart=/usr/local/bin/focus-on-work-daemon
 Restart=always
 RestartSec=2s

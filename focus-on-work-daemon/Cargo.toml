@@ -6,7 +6,6 @@ license-file.workspace = true
 
 [dependencies]
 focus-on-work-core = { path = "../focus-on-work-core" }
-libc = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 signal-hook = "0.3"

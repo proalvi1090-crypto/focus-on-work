@@ -49,6 +49,9 @@ on the hardening configuration:
 
 - `After=local-fs.target` starts after local filesystems are available.
 - `User=root` permits hosts edits and process termination.
+- `Group=focus-on-work` makes the runtime directory and socket available to
+  members of the dedicated group; `RuntimeDirectoryMode=0770` lets them enter
+  the directory.
 - `Restart=always` and `RestartSec=2s` recover from daemon exits.
 - `ProtectSystem=full` makes the rest of the filesystem read-only.
 - `ReadWritePaths=/etc` allows hosts updates. `StateDirectory=focus-on-work`
@@ -113,8 +116,9 @@ policy before distributing binaries.
 - Hosts-file blocking cannot wildcard subdomains and can be bypassed by
   browsers using DNS-over-HTTPS.
 - Snap/Flatpak process naming is untested.
-- Users must join the `focus-on-work` group (`sudo usermod -aG focus-on-work
-  USER`) and log in again before using the socket without sudo.
+- - The installer creates the `focus-on-work` group. Users must join it
+  (`sudo usermod -aG focus-on-work USER`) and log in again before using the
+  socket without sudo. Users outside the group are denied.
 - A root user can always undo the hosts or process block.
 
 ## Safe manual test plan
