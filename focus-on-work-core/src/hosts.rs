@@ -139,14 +139,20 @@ pub fn repair_block(path: &Path, domains: &[Domain]) -> Result<(), Error> {
     match marker_bounds(&text) {
         Ok(_) => apply_block(path, domains),
         Err(_) => {
+            let had_trailing_newline = text.ends_with(['\n', '\r']);
             let lines = text
-                .lines()
-                .filter(|line| *line != BEGIN_MARKER && *line != END_MARKER)
-                .collect::<Vec<_>>()
-                .join("\n");
+                .split_inclusive('\n')
+                .filter(|line| {
+                    line.trim_end_matches(['\n', '\r']) != BEGIN_MARKER
+                        && line.trim_end_matches(['\n', '\r']) != END_MARKER
+                })
+                .collect::<String>();
             let ending = line_ending(&text);
             let block = build_block(domains).replace('\n', ending);
-            let replacement = append_section(&lines, &block, ending);
+            let mut replacement = append_section(&lines, &block, ending);
+            if had_trailing_newline {
+                replacement.push_str(ending);
+            }
             atomic_write(path, replacement.as_bytes())
         }
     }
@@ -394,6 +400,21 @@ mod tests {
         let result = fs::read_to_string(&path).expect("read");
         assert!(result.contains("before\n"));
         assert!(is_block_present(&path, &[domain("example.com")]).expect("presence"));
+    }
+
+    #[test]
+    fn repair_preserves_crlf_line_endings_and_trailing_newline() {
+        let directory = tempdir().expect("tempdir");
+        let path = directory.path().join("hosts");
+        fs::write(&path, "before\r\n# BEGIN focus-on-work\r\nbroken\r\n").expect("write");
+
+        repair_block(&path, &[domain("example.com")]).expect("repair");
+
+        let result = fs::read(&path).expect("read");
+        let text = String::from_utf8(result).expect("utf8");
+        assert!(!text.contains('\n') || text.matches("\r\n").count() == text.matches('\n').count());
+        assert!(text.starts_with("before\r\nbroken\r\n"));
+        assert!(text.ends_with("# END focus-on-work\r\n"));
     }
 
     #[test]

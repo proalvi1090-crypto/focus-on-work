@@ -103,3 +103,13 @@
   when its bytes differ from the current hosts file; existing-block updates
   still preserve the backup. Focused and workspace Rust checks passed.
 - Unverified: none for temporary-file behavior.
+
+## 12. Hosts repair line endings
+
+- Status: DONE
+- Files changed: `focus-on-work-core/src/hosts.rs`, `FIXLOG.md`
+- Tests added: CRLF corrupted-marker repair with a preserved trailing newline
+- How verified: repair now filters complete line segments without converting
+  their original endings to LF and preserves the original final newline.
+  Workspace formatting, clippy, and tests passed.
+- Unverified: none for the covered temporary-file cases.
