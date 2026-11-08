@@ -4,6 +4,7 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
@@ -15,7 +16,7 @@ use focus_on_work_core::session::{self, Session};
 use serde::{Deserialize, Serialize};
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::flag;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
@@ -36,6 +37,7 @@ struct Response {
     session: Option<Session>,
 }
 
+#[derive(Clone)]
 struct Config {
     hosts: PathBuf,
     state: PathBuf,
@@ -93,44 +95,77 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stopping = Arc::new(AtomicBool::new(false));
     flag::register(SIGTERM, Arc::clone(&stopping))?;
     flag::register(SIGINT, Arc::clone(&stopping))?;
-    let mut current = match session::load(&config.state) {
+    let current = match session::load(&config.state) {
         Ok(session) => session,
         Err(error) => {
             warn!(%error, "ignoring invalid state file");
+            if let Err(remove_error) = hosts::remove_block_if_complete(&config.hosts) {
+                warn!(%remove_error, "could not remove leftover hosts block");
+            }
             None
         }
     };
-    if current
+    let current = if current
         .as_ref()
         .is_some_and(|s| !s.is_active(session::now_unix()))
     {
-        hosts::remove_block(&config.hosts)?;
-        session::clear(&config.state)?;
-        current = None;
-    }
+        if let Err(error) = hosts::remove_block(&config.hosts) {
+            warn!(%error, "could not remove expired hosts block");
+        }
+        if let Err(error) = session::clear(&config.state) {
+            warn!(%error, "could not clear expired state");
+        }
+        None
+    } else {
+        current
+    };
+    let current = Arc::new(Mutex::new(current));
+    let accept_config = config.clone();
+    let accept_current = Arc::clone(&current);
+    let accept_stopping = Arc::clone(&stopping);
+    thread::spawn(move || {
+        while !accept_stopping.load(Ordering::Relaxed) {
+            match listener.accept() {
+                Ok((stream, _)) => {
+                    let config = accept_config.clone();
+                    let current = Arc::clone(&accept_current);
+                    thread::spawn(move || {
+                        if let Err(error) = handle_client(stream, &config, &current) {
+                            warn!(%error, "client request failed");
+                        }
+                    });
+                }
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(50));
+                }
+                Err(error) => warn!(%error, "socket accept failed"),
+            }
+        }
+    });
     info!("daemon started");
     while !stopping.load(Ordering::Relaxed) {
-        if let Some(active) = current.as_ref() {
-            if !hosts::is_block_present(&config.hosts, &active.sites)? {
-                hosts::apply_block(&config.hosts, &active.sites)?;
+        let mut state = current
+            .lock()
+            .map_err(|_| io::Error::other("state lock poisoned"))?;
+        if let Some(active) = state.as_ref() {
+            if !hosts::is_block_present(&config.hosts, &active.sites).unwrap_or(false)
+                && let Err(error) = hosts::repair_block(&config.hosts, &active.sites)
+            {
+                warn!(%error, "could not repair managed hosts block");
             }
             process::terminate_matching(&active.apps, Some(std::process::id()));
             if !active.is_active(session::now_unix()) {
-                hosts::remove_block(&config.hosts)?;
-                session::clear(&config.state)?;
-                current = None;
+                if let Err(error) = hosts::remove_block(&config.hosts) {
+                    warn!(%error, "could not remove expired hosts block");
+                }
+                if let Err(error) = session::clear(&config.state) {
+                    warn!(%error, "could not clear expired state");
+                }
+                *state = None;
                 info!("session expired");
             }
         }
-        match listener.accept() {
-            Ok((stream, _)) => {
-                if let Some(response) = handle_client(stream, &config, &mut current)? {
-                    info!(ok = response.ok, "request handled");
-                }
-            }
-            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {}
-            Err(error) => error!(%error, "socket accept failed"),
-        }
+        drop(state);
         thread::sleep(Duration::from_secs(2));
     }
     info!("daemon stopping; active hosts block remains in place");
@@ -141,12 +176,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn handle_client(
     mut stream: UnixStream,
     config: &Config,
-    current: &mut Option<Session>,
-) -> io::Result<Option<Response>> {
+    current: &Arc<Mutex<Option<Session>>>,
+) -> io::Result<()> {
+    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(2)))?;
     let mut line = String::new();
     BufReader::new(stream.try_clone()?).read_line(&mut line)?;
+    let mut current = current
+        .lock()
+        .map_err(|_| io::Error::other("state lock poisoned"))?;
     let response = match serde_json::from_str::<Request>(&line) {
-        Ok(request) => handle_request(request, config, current),
+        Ok(request) => handle_request(request, config, &mut current),
         Err(error) => Response {
             ok: false,
             error: Some(format!("invalid request: {error}")),
@@ -155,7 +195,7 @@ fn handle_client(
     };
     serde_json::to_writer(&mut stream, &response)?;
     stream.write_all(b"\n")?;
-    Ok(Some(response))
+    Ok(())
 }
 
 fn handle_request(request: Request, config: &Config, current: &mut Option<Session>) -> Response {

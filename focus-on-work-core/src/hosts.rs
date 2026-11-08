@@ -1,7 +1,7 @@
 //! Safe, atomic editing of the managed section in a hosts file.
 
 use std::fs;
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -91,7 +91,13 @@ pub fn apply_block(path: &Path, domains: &[Domain]) -> Result<(), Error> {
         append_section(&text, &block, ending)
     };
 
-    fs::copy(path, backup_path(path))?;
+    let has_existing_block = start.is_some() && end.is_some();
+    if !has_existing_block {
+        let backup = backup_path(path);
+        if !backup.exists() {
+            fs::copy(path, backup)?;
+        }
+    }
     atomic_write(path, replacement.as_bytes())?;
     Ok(())
 }
@@ -106,6 +112,39 @@ pub fn remove_block(path: &Path) -> Result<(), Error> {
         atomic_write(path, updated.as_bytes())?;
     }
     Ok(())
+}
+
+/// Removes a complete managed block, leaving malformed files untouched.
+pub fn remove_block_if_complete(path: &Path) -> Result<bool, Error> {
+    let bytes = read_file(path)?;
+    let text = String::from_utf8(bytes).map_err(|_| Error::InvalidUtf8)?;
+    let (start, end) = marker_bounds(&text)?;
+    if start.is_some() && end.is_some() {
+        remove_block(path)?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+/// Rewrites the managed block even when old marker lines are malformed.
+pub fn repair_block(path: &Path, domains: &[Domain]) -> Result<(), Error> {
+    let bytes = read_file(path)?;
+    let text = String::from_utf8(bytes).map_err(|_| Error::InvalidUtf8)?;
+    match marker_bounds(&text) {
+        Ok(_) => apply_block(path, domains),
+        Err(_) => {
+            let lines = text
+                .lines()
+                .filter(|line| *line != BEGIN_MARKER && *line != END_MARKER)
+                .collect::<Vec<_>>()
+                .join("\n");
+            let ending = line_ending(&text);
+            let block = build_block(domains).replace('\n', ending);
+            let replacement = append_section(&lines, &block, ending);
+            atomic_write(path, replacement.as_bytes())
+        }
+    }
 }
 
 /// Reports whether the managed block exactly matches the supplied domains.
@@ -203,7 +242,9 @@ fn atomic_write(path: &Path, contents: &[u8]) -> Result<(), Error> {
         return Err(Error::InvalidPath);
     }
     let temp = tempfile_path(path);
-    fs::write(&temp, contents)?;
+    let mut file = fs::File::create(&temp)?;
+    file.write_all(contents)?;
+    file.sync_all()?;
     if let Ok(metadata) = fs::metadata(path) {
         fs::set_permissions(&temp, metadata.permissions())?;
     }
@@ -337,5 +378,29 @@ mod tests {
         fs::write(&path, "").expect("write");
         apply_block(&path, &[]).expect("apply");
         assert!(is_block_present(&path, &[]).expect("presence"));
+    }
+
+    #[test]
+    fn repair_replaces_corrupt_marker_lines() {
+        let directory = tempdir().expect("tempdir");
+        let path = directory.path().join("hosts");
+        fs::write(&path, "before\n# BEGIN focus-on-work\nbroken\n").expect("write");
+        repair_block(&path, &[domain("example.com")]).expect("repair");
+        let result = fs::read_to_string(&path).expect("read");
+        assert!(result.contains("before\n"));
+        assert!(is_block_present(&path, &[domain("example.com")]).expect("presence"));
+    }
+
+    #[test]
+    fn applying_existing_block_does_not_replace_backup() {
+        let directory = tempdir().expect("tempdir");
+        let path = directory.path().join("hosts");
+        fs::write(&path, "before\n").expect("write");
+        apply_block(&path, &[domain("old.example")]).expect("apply");
+        apply_block(&path, &[domain("new.example")]).expect("replace");
+        assert_eq!(
+            fs::read_to_string(path.with_extension("bak")).expect("backup"),
+            "before\n"
+        );
     }
 }
