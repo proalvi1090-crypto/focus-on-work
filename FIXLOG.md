@@ -74,3 +74,11 @@
   reported as less than roughly `0.033%` of one core).
 - Unverified: this low-process sandbox measurement does not represent a busy
   desktop.
+
+## 9. Cleanup: nested lockfile
+
+- Status: DONE
+- Files changed: `focus-on-work-core/Cargo.lock`, `FIXLOG.md`
+- Tests added: none
+- How verified: the workspace has only the root `Cargo.lock`; repository checks passed after removal.
+- Unverified: none.
