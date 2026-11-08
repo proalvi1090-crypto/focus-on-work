@@ -1425,7 +1425,6 @@ name = "focus-on-work-daemon"
 version = "0.1.0"
 dependencies = [
  "focus-on-work-core",
- "libc",
  "serde",
  "serde_json",
  "signal-hook",
