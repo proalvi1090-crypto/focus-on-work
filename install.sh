@@ -4,7 +4,14 @@ set -eu
 PREFIX=${PREFIX:-/usr/local}
 UNIT_DIR=${UNIT_DIR:-/etc/systemd/system}
 echo "Building release binaries..."
-cargo build --release --workspace
+if command -v cargo >/dev/null 2>&1; then
+    cargo build --release -p focus-on-work-daemon -p focus-on-work-cli
+else
+    echo "cargo was not found in root's PATH."
+    echo "Build with cargo as your normal user first, or install Rust for this user."
+    test -x target/release/focus-on-work-daemon
+    test -x target/release/focus-on-work
+fi
 echo "Installing binaries to $PREFIX/bin..."
 install -Dm755 target/release/focus-on-work-daemon "$PREFIX/bin/focus-on-work-daemon"
 install -Dm755 target/release/focus-on-work "$PREFIX/bin/focus-on-work"
