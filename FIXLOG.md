@@ -26,11 +26,11 @@
 
 ## 2. Daemon robustness follow-up
 
-- Status: PARTIAL
+- Status: DONE
 - Files changed: `scripts/test-daemon-clients.sh`
 - Tests added: silent-client, abrupt-disconnect, and fast-status integration script using temporary paths
-- How verified: the script is ready for `cargo build -p focus-on-work-daemon && scripts/test-daemon-clients.sh`; Rust checks pass.
-- Unverified: the integration script was not run in this environment after the final daemon build.
+- How verified: `cargo build -p focus-on-work-daemon && scripts/test-daemon-clients.sh` passed with a 0.045s status response; Rust checks pass.
+- Unverified: none for the temporary-path client scenario.
 
 ## 5. Install and uninstall scripts
 
