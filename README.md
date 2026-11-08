@@ -105,7 +105,7 @@ presets for the next session and uses only the custom entries. Settings can be
 locked before starting a session; this disables editing controls until
 unlocked.
 
-`deny.toml` permits the listed dependency licenses and GPL-3.0-only. Run
+`deny.toml` permits the listed dependency licenses. Run
 `cargo deny check licenses` in CI after installing `cargo-deny`.
 
 ## Limitations
@@ -141,9 +141,10 @@ machine until the service unit's permissions and hardening have been reviewed.
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0
-(GPL-3.0-only). You may use, modify, and distribute it under the GPL's terms.
-If you distribute modified versions, you must provide the corresponding source
-code and preserve the same license. See [LICENSE](./LICENSE) for the complete
-license text.
+This project is available under the
+**Kamran Ahmed Alvi Personal Use & Conditional Commercial License**.
+Personal, educational, and hobby use is free. Commercial use, business
+integration, or selling the software requires explicit written permission or
+a commercial license from Kamran Ahmed Alvi. See [LICENSE](./LICENSE) for the
+complete license text.
 # focus-on-work
