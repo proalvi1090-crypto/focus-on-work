@@ -26,26 +26,6 @@ multiple-versions = "warn"
 version = 2
 ignore = []
 
-[[licenses.clarify]]
-crate = "focus-on-work-cli"
-expression = "MIT"
-license-files = [{ path = "../LICENSE", hash = 0x65a1adbe }]
-
-[[licenses.clarify]]
-crate = "focus-on-work-core"
-expression = "MIT"
-license-files = [{ path = "../LICENSE", hash = 0x65a1adbe }]
-
-[[licenses.clarify]]
-crate = "focus-on-work-daemon"
-expression = "MIT"
-license-files = [{ path = "../LICENSE", hash = 0x65a1adbe }]
-
-[[licenses.clarify]]
-crate = "focus-on-work-gui"
-expression = "MIT"
-license-files = [{ path = "../LICENSE", hash = 0x65a1adbe }]
-
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"

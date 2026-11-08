@@ -105,11 +105,8 @@ presets for the next session and uses only the custom entries. Settings can be
 locked before starting a session; this disables editing controls until
 unlocked.
 
-`deny.toml` permits the listed permissive licenses and explicitly allows
-GPL-3.0-only; it does not claim that every copyleft license is denied. Run
-`cargo deny check licenses` in CI after installing `cargo-deny`; Slint's own
-licensing terms should also be reviewed against the project's Commons Clause
-policy before distributing binaries.
+`deny.toml` permits the listed dependency licenses and GPL-3.0-only. Run
+`cargo deny check licenses` in CI after installing `cargo-deny`.
 
 ## Limitations
 
@@ -144,17 +141,9 @@ machine until the service unit's permissions and hardening have been reviewed.
 
 ## License
 
-This project is source-available under the MIT License with an additional
-Commons Clause condition. You may read, learn from, copy, modify, and use it
-for personal, educational, research, and other non-commercial purposes.
-
-You may not sell the software, include it in commercial software, offer paid
-hosting or services based on it, or use it for a commercial business without
-prior written permission from Kamran Ahmed Alvi (proalvi1090-crypto). The
-copyright notice and complete license text must remain with copies or
-substantial portions of the software.
-
-Because commercial use is restricted, this is source-available and is not an
-OSI-approved Open Source license. Consult a qualified lawyer before relying on
-this custom license for commercial or redistribution decisions.
+This project is licensed under the GNU General Public License v3.0
+(GPL-3.0-only). You may use, modify, and distribute it under the GPL's terms.
+If you distribute modified versions, you must provide the corresponding source
+code and preserve the same license. See [LICENSE](./LICENSE) for the complete
+license text.
 # focus-on-work

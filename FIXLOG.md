@@ -126,3 +126,16 @@
   Formatting, clippy, and all workspace tests passed.
 - Unverified: real high-volume connection pressure and mutex poisoning caused
   by a production panic need a VM/manual stress run.
+
+## 14. GPL v3 license
+
+- Status: DONE
+- Files changed: `LICENSE`, all workspace `Cargo.toml` manifests, `deny.toml`,
+  `README.md`, `FIXLOG.md`
+- Tests added: none
+- How verified: replaced the project license with the official GNU GPL v3 text
+  and added the 2026 project copyright notice, updated Cargo SPDX metadata,
+  removed obsolete MIT license clarifications, and updated README terms.
+  Cargo metadata, formatting, clippy, and workspace tests passed.
+- Unverified: `cargo-deny` was not installed in this environment, so its final
+  license-policy run must be performed separately.
