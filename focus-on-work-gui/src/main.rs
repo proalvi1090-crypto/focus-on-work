@@ -45,6 +45,10 @@ struct GuiConfig {
     games_enabled: bool,
     #[serde(default)]
     videos_enabled: bool,
+    #[serde(default)]
+    custom_sites: String,
+    #[serde(default)]
+    custom_apps: String,
     sites: Vec<String>,
     apps: Vec<String>,
 }
@@ -54,6 +58,7 @@ fn default_social_media() -> bool {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    gtk::init()?;
     let ui = AppWindow::new()?;
     let socket = env::var_os("FOW_SOCKET_PATH")
         .map(PathBuf::from)
@@ -134,8 +139,14 @@ fn install_callbacks(ui: &AppWindow, socket: PathBuf, config_path: PathBuf) {
                     ui.get_active_profile().as_str(),
                     ui.get_social_media_enabled(),
                     ui.get_videos_enabled(),
+                    ui.get_allow_list_mode(),
+                    ui.get_custom_sites().as_str(),
                 ),
-                apps: selected_apps(ui.get_games_enabled()),
+                apps: selected_apps(
+                    ui.get_games_enabled(),
+                    ui.get_allow_list_mode(),
+                    ui.get_custom_apps().as_str(),
+                ),
             };
             match request(&start_socket, start_request) {
                 Ok(response) if response.ok => {
@@ -185,12 +196,20 @@ fn install_callbacks(ui: &AppWindow, socket: PathBuf, config_path: PathBuf) {
                 social_media_enabled: ui.get_social_media_enabled(),
                 games_enabled: ui.get_games_enabled(),
                 videos_enabled: ui.get_videos_enabled(),
+                custom_sites: ui.get_custom_sites().to_string(),
+                custom_apps: ui.get_custom_apps().to_string(),
                 sites: selected_sites(
                     ui.get_active_profile().as_str(),
                     ui.get_social_media_enabled(),
                     ui.get_videos_enabled(),
+                    ui.get_allow_list_mode(),
+                    ui.get_custom_sites().as_str(),
                 ),
-                apps: selected_apps(ui.get_games_enabled()),
+                apps: selected_apps(
+                    ui.get_games_enabled(),
+                    ui.get_allow_list_mode(),
+                    ui.get_custom_apps().as_str(),
+                ),
             };
             match serde_json::to_vec_pretty(&config)
                 .map_err(std::io::Error::other)
@@ -219,6 +238,22 @@ fn install_callbacks(ui: &AppWindow, socket: PathBuf, config_path: PathBuf) {
                     ui.set_social_media_enabled(config.social_media_enabled);
                     ui.set_games_enabled(config.games_enabled);
                     ui.set_videos_enabled(config.videos_enabled);
+                    ui.set_custom_sites(
+                        if !config.custom_sites.is_empty() {
+                            config.custom_sites
+                        } else {
+                            config.sites.join(", ")
+                        }
+                        .into(),
+                    );
+                    ui.set_custom_apps(
+                        if !config.custom_apps.is_empty() {
+                            config.custom_apps
+                        } else {
+                            config.apps.join(", ")
+                        }
+                        .into(),
+                    );
                     ui.set_status_text("Configuration imported".into());
                 }
                 Err(error) => {
@@ -271,26 +306,73 @@ fn update_status(ui: &AppWindow, session: Option<Session>) {
     }
 }
 
-fn selected_sites(profile: &str, social_media: bool, videos: bool) -> Vec<String> {
+fn selected_sites(
+    profile: &str,
+    social_media: bool,
+    videos: bool,
+    custom_only: bool,
+    custom: &str,
+) -> Vec<String> {
     let mut sites = Vec::new();
-    if social_media {
-        sites.extend(["facebook.com", "instagram.com"]);
+    if !custom_only {
+        if social_media {
+            sites.extend(
+                [
+                    "facebook.com",
+                    "instagram.com",
+                    "tiktok.com",
+                    "x.com",
+                    "twitter.com",
+                ]
+                .into_iter()
+                .map(str::to_owned),
+            );
+        }
+        if videos {
+            sites.extend(
+                ["youtube.com", "netflix.com", "twitch.tv"]
+                    .into_iter()
+                    .map(str::to_owned),
+            );
+        }
+        if profile == "Sleep" {
+            sites.extend(
+                ["reddit.com", "news.ycombinator.com"]
+                    .into_iter()
+                    .map(str::to_owned),
+            );
+        }
     }
-    if videos {
-        sites.push("youtube.com");
-    }
-    if sites.is_empty() && profile == "Sleep" {
-        sites.push("reddit.com");
-    }
-    sites.into_iter().map(str::to_owned).collect()
+    sites.extend(split_entries(custom));
+    unique(sites)
 }
 
-fn selected_apps(games: bool) -> Vec<String> {
-    if games {
-        vec!["steam".into()]
-    } else {
-        Vec::new()
+fn selected_apps(games: bool, custom_only: bool, custom: &str) -> Vec<String> {
+    let mut apps = Vec::new();
+    if games && !custom_only {
+        apps.extend(["steam", "lutris", "heroic"].into_iter().map(str::to_owned));
     }
+    apps.extend(split_entries(custom));
+    unique(apps)
+}
+
+fn split_entries(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+fn unique(entries: Vec<String>) -> Vec<String> {
+    let mut result = Vec::new();
+    for entry in entries {
+        if !result.iter().any(|existing| existing == &entry) {
+            result.push(entry);
+        }
+    }
+    result
 }
 
 fn format_timer(seconds: u64) -> String {
@@ -307,4 +389,36 @@ fn now_unix() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn custom_entries_are_added_and_deduplicated() {
+        assert_eq!(
+            selected_sites(
+                "Work",
+                false,
+                false,
+                false,
+                "reddit.com, example.com, reddit.com"
+            ),
+            vec!["reddit.com", "example.com"]
+        );
+        assert_eq!(
+            selected_apps(true, false, "steam, discord, steam"),
+            vec!["steam", "lutris", "heroic", "discord"]
+        );
+    }
+
+    #[test]
+    fn custom_only_excludes_presets() {
+        assert_eq!(
+            selected_sites("Study", true, true, true, "example.com"),
+            vec!["example.com"]
+        );
+        assert_eq!(selected_apps(true, true, "discord"), vec!["discord"]);
+    }
 }

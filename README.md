@@ -94,6 +94,12 @@ expiry. `FOW_GUI_CONFIG` changes the JSON import/export path. Closing the
 window hides it and sends a desktop notification; the daemon continues
 enforcing an active session.
 
+The GUI supports preset categories plus custom comma-separated website domains
+and process-name keywords. `Custom list only` disables the presets for the next
+session and uses only the custom entries. Settings can be locked before
+starting a session to prevent accidental changes; unlock them to edit the
+next session.
+
 `deny.toml` permits only MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, and
 CC0-1.0 dependency licenses and denies copyleft licenses. Run
 `cargo deny check licenses` in CI after installing `cargo-deny`; Slint's own

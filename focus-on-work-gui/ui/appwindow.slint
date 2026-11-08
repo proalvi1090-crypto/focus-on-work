@@ -1,8 +1,8 @@
-import { Button, CheckBox, HorizontalBox, Slider, SpinBox, VerticalBox } from "std-widgets.slint";
+import { Button, CheckBox, HorizontalBox, LineEdit, ScrollView, Slider, SpinBox, VerticalBox } from "std-widgets.slint";
 
 export component AppWindow inherits Window {
     width: 900px;
-    height: 680px;
+    height: 800px;
     title: "Focus on Work";
     background: #10131a;
 
@@ -16,6 +16,8 @@ export component AppWindow inherits Window {
     in-out property <bool> social-media-enabled: true;
     in-out property <bool> games-enabled: false;
     in-out property <bool> videos-enabled: false;
+    in-out property <string> custom-sites: "";
+    in-out property <string> custom-apps: "";
 
     callback start-session();
     callback refresh-status();
@@ -23,9 +25,13 @@ export component AppWindow inherits Window {
     callback import-config();
     callback toggle-lock();
 
-    VerticalBox {
-        padding: 28px;
-        spacing: 18px;
+    ScrollView {
+        width: parent.width;
+        height: parent.height;
+        VerticalBox {
+            width: parent.width;
+            padding: 28px;
+            spacing: 18px;
 
         Text {
             text: "Focus on Work";
@@ -74,12 +80,13 @@ export component AppWindow inherits Window {
             VerticalBox {
                 spacing: 10px;
                 Text { text: "Block categories"; color: #f5f7fb; font-size: 18px; }
-                CheckBox { text: "Social Media"; checked <=> social-media-enabled; }
-                CheckBox { text: "Games"; checked <=> games-enabled; }
-                CheckBox { text: "Videos"; checked <=> videos-enabled; }
+                CheckBox { text: "Social media"; checked <=> social-media-enabled; enabled: !lock-enabled; }
+                CheckBox { text: "Games"; checked <=> games-enabled; enabled: !lock-enabled; }
+                CheckBox { text: "Video sites"; checked <=> videos-enabled; enabled: !lock-enabled; }
                 CheckBox {
-                    text: "Allow-list mode";
+                    text: "Custom list only";
                     checked <=> allow-list-mode;
+                    enabled: !lock-enabled;
                 }
             }
             VerticalBox {
@@ -89,12 +96,14 @@ export component AppWindow inherits Window {
                     minimum: 15;
                     maximum: 480;
                     value: duration-minutes;
+                    enabled: !lock-enabled;
                     changed => { duration-minutes = self.value; }
                 }
                 SpinBox {
                     minimum: 15;
                     maximum: 480;
                     value <=> duration-minutes;
+                    enabled: !lock-enabled;
                 }
                 Text {
                     text: "Profile: " + active-profile;
@@ -103,11 +112,41 @@ export component AppWindow inherits Window {
             }
         }
 
+        Rectangle {
+            background: #191e29;
+            border-radius: 12px;
+            VerticalBox {
+                padding: 16px;
+                spacing: 8px;
+                Text { text: "Your websites and apps"; color: #f5f7fb; font-size: 18px; }
+                Text {
+                    text: "Websites: comma-separated domains, e.g. reddit.com, news.ycombinator.com";
+                    color: #9da7b8;
+                    font-size: 12px;
+                }
+                LineEdit {
+                    placeholder-text: "reddit.com, example.com";
+                    text <=> custom-sites;
+                    enabled: !lock-enabled;
+                }
+                Text {
+                    text: "Apps: process names or keywords, e.g. firefox, steam, discord";
+                    color: #9da7b8;
+                    font-size: 12px;
+                }
+                LineEdit {
+                    placeholder-text: "steam, discord";
+                    text <=> custom-apps;
+                    enabled: !lock-enabled;
+                }
+            }
+        }
+
         HorizontalBox {
             spacing: 10px;
             Button {
                 text: session-active ? "Session active" : "Start focus session";
-                enabled: !session-active;
+                enabled: !session-active && !lock-enabled;
                 clicked => { start-session(); }
             }
             Button {
@@ -115,13 +154,14 @@ export component AppWindow inherits Window {
                 clicked => { toggle-lock(); }
             }
             Rectangle { horizontal-stretch: 1; }
-            Button { text: "Import JSON"; clicked => { import-config(); } }
-            Button { text: "Export JSON"; clicked => { export-config(); } }
+            Button { text: "Import JSON"; enabled: !lock-enabled; clicked => { import-config(); } }
+            Button { text: "Export JSON"; enabled: !lock-enabled; clicked => { export-config(); } }
         }
-        Text {
-            text: lock-enabled ? "Settings locked. A 10-minute cooldown protects this session." : "Settings are unlocked.";
-            color: lock-enabled ? #fbbf24 : #7f8da3;
-            wrap: word-wrap;
+            Text {
+                text: lock-enabled ? "Settings locked. Unlock to change the next session." : "Settings are unlocked.";
+                color: lock-enabled ? #fbbf24 : #7f8da3;
+                wrap: word-wrap;
+            }
         }
     }
 }
