@@ -62,7 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ui = AppWindow::new()?;
     let socket = env::var_os("FOW_SOCKET_PATH")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/run/focus-on-work.sock"));
+        .unwrap_or_else(|| PathBuf::from("/run/focus-on-work/focus-on-work.sock"));
     let config_path = env::var_os("FOW_GUI_CONFIG")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("focus-on-work.json"));

@@ -1,6 +1,8 @@
 use std::env;
 use std::fs;
 use std::io::{self, BufRead, BufReader, Write};
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -55,7 +57,7 @@ impl Config {
                 .unwrap_or_else(|| PathBuf::from("/var/lib/focus-on-work/state.json")),
             socket: env::var_os("FOW_SOCKET_PATH")
                 .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("/run/focus-on-work.sock")),
+                .unwrap_or_else(|| PathBuf::from("/run/focus-on-work/focus-on-work.sock")),
         }
     }
 
@@ -83,6 +85,41 @@ impl Config {
     }
 }
 
+fn set_socket_permissions(socket: &std::path::Path) {
+    let group_id = fs::read_to_string("/etc/group").ok().and_then(|groups| {
+        groups.lines().find_map(|line| {
+            let mut fields = line.split(':');
+            (fields.next() == Some("focus-on-work"))
+                .then(|| fields.nth(1)?.parse::<u32>().ok())
+                .flatten()
+        })
+    });
+    let Some(group_id) = group_id else {
+        warn!("group focus-on-work is unavailable; using root-only socket permissions");
+        if let Err(error) = fs::set_permissions(socket, fs::Permissions::from_mode(0o600)) {
+            warn!(%error, "could not set root-only socket permissions");
+        }
+        return;
+    };
+    if let Err(error) = fs::set_permissions(socket, fs::Permissions::from_mode(0o660)) {
+        warn!(%error, "could not set socket permissions");
+        return;
+    }
+    // The daemon is root-owned; changing only the group does not require
+    // trusting any client-provided path or command.
+    let result = unsafe {
+        libc::chown(
+            socket.as_os_str().as_bytes().as_ptr().cast(),
+            u32::MAX,
+            group_id,
+        )
+    };
+    if result != 0 {
+        warn!(error = %io::Error::last_os_error(), "could not set socket group; using root-only permissions");
+        let _ = fs::set_permissions(socket, fs::Permissions::from_mode(0o600));
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
     let config = Config::from_env().apply_args();
@@ -91,6 +128,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let _ = fs::remove_file(&config.socket);
     let listener = UnixListener::bind(&config.socket)?;
+    set_socket_permissions(&config.socket);
     listener.set_nonblocking(true)?;
     let stopping = Arc::new(AtomicBool::new(false));
     flag::register(SIGTERM, Arc::clone(&stopping))?;
@@ -102,6 +140,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Err(remove_error) = hosts::remove_block_if_complete(&config.hosts) {
                 warn!(%remove_error, "could not remove leftover hosts block");
             }
+
             None
         }
     };

@@ -13,7 +13,7 @@ struct Cli {
     #[arg(
         long,
         env = "FOW_SOCKET_PATH",
-        default_value = "/run/focus-on-work.sock",
+        default_value = "/run/focus-on-work/focus-on-work.sock",
         global = true
     )]
     socket: PathBuf,
