@@ -11,7 +11,7 @@ client, and a Slint desktop GUI.
 The daemon reads `FOW_HOSTS_PATH`, `FOW_STATE_PATH`, and `FOW_SOCKET_PATH`;
 command-line flags `--hosts`, `--state`, and `--socket` override those
 environment variables. Defaults target `/etc/hosts`, `/var/lib/focus-on-work`,
-and `/run/focus-on-work.sock`, respectively.
+and `/run/focus-on-work/focus-on-work.sock`, respectively.
 
 For safe local testing, use a temporary hosts file and socket:
 
@@ -51,7 +51,9 @@ on the hardening configuration:
 - `User=root` permits hosts edits and process termination.
 - `Restart=always` and `RestartSec=2s` recover from daemon exits.
 - `ProtectSystem=full` makes the rest of the filesystem read-only.
-- `ReadWritePaths` allows only `/etc/hosts`, state, and runtime directories.
+- `ReadWritePaths=/etc` allows hosts updates. `StateDirectory=focus-on-work`
+  provides `/var/lib/focus-on-work`, and `RuntimeDirectory=focus-on-work`
+  provides the socket directory.
 - `ProtectHome=yes` hides users' home directories.
 - `PrivateTmp=yes` gives the service a private temporary directory.
 - `PrivateDevices=yes` hides unnecessary device nodes.
@@ -81,7 +83,7 @@ The GUI is the `focus-on-work-gui` workspace member. Build and run it with:
 cargo run -p focus-on-work-gui
 ```
 
-It connects to `/run/focus-on-work.sock` by default. For local testing, point
+It connects to `/run/focus-on-work/focus-on-work.sock` by default. For local testing, point
 both processes at the same temporary socket:
 
 ```sh
@@ -95,21 +97,24 @@ window hides it and sends a desktop notification; the daemon continues
 enforcing an active session.
 
 The GUI supports preset categories plus custom comma-separated website domains
-and process-name keywords. `Custom list only` disables the presets for the next
-session and uses only the custom entries. Settings can be locked before
-starting a session to prevent accidental changes; unlock them to edit the
-next session.
+and exact process names or executable paths. `Custom list only` disables the
+presets for the next session and uses only the custom entries. Settings can be
+locked before starting a session; this disables editing controls until
+unlocked.
 
-`deny.toml` permits only MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, and
-CC0-1.0 dependency licenses and denies copyleft licenses. Run
+`deny.toml` permits the listed permissive licenses and explicitly allows
+GPL-3.0-only; it does not claim that every copyleft license is denied. Run
 `cargo deny check licenses` in CI after installing `cargo-deny`; Slint's own
 licensing terms should also be reviewed against the project's Commons Clause
 policy before distributing binaries.
 
 ## Limitations
 
-- Hosts-file blocking can be bypassed by browsers using DNS-over-HTTPS.
-- Process matching for Snap/Flatpak applications may need tuning.
+- Hosts-file blocking cannot wildcard subdomains and can be bypassed by
+  browsers using DNS-over-HTTPS.
+- Snap/Flatpak process naming is untested.
+- Users must join the `focus-on-work` group (`sudo usermod -aG focus-on-work
+  USER`) and log in again before using the socket without sudo.
 - A root user can always undo the hosts or process block.
 
 ## Safe manual test plan

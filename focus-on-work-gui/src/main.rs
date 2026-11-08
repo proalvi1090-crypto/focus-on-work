@@ -3,6 +3,7 @@ use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
+use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use focus_on_work_core::process;
@@ -64,13 +65,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let socket = env::var_os("FOW_SOCKET_PATH")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/run/focus-on-work/focus-on-work.sock"));
-    let config_path = env::var_os("FOW_GUI_CONFIG")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("focus-on-work.json"));
+    let config_path = config_path();
 
     install_callbacks(&ui, socket.clone(), config_path);
     let (_tray, show_menu_id, quit_menu_id) = create_tray()?;
     let weak = ui.as_weak();
+    let timer_weak = ui.as_weak();
     let timer = Timer::default();
     timer.start(TimerMode::Repeated, Duration::from_secs(1), move || {
         while let Ok(event) = MenuEvent::receiver().try_recv() {
@@ -82,18 +82,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let _ = slint::quit_event_loop();
             }
         }
-        if let Some(ui) = weak.upgrade() {
-            match request(&socket, Request::Status) {
-                Ok(response) if response.ok => update_status(&ui, response.session),
-                Ok(response) => ui.set_status_text(
-                    response
-                        .error
-                        .unwrap_or_else(|| "Daemon rejected status request".into())
-                        .into(),
-                ),
-                Err(error) => ui.set_status_text(format!("Daemon unavailable: {error}").into()),
-            }
-        }
+        let status_socket = socket.clone();
+        let result_weak = timer_weak.clone();
+        thread::spawn(move || {
+            let result = request(&status_socket, Request::Status);
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(ui) = result_weak.upgrade() {
+                    apply_response(&ui, result, "Daemon rejected status request");
+                }
+            });
+        });
     });
 
     let close_weak = ui.as_weak();
@@ -119,7 +117,21 @@ fn create_tray() -> Result<(TrayIcon, MenuId, MenuId), Box<dyn std::error::Error
     let quit_menu_id = quit.id().clone();
     menu.append(&show)?;
     menu.append(&quit)?;
-    let icon = Icon::from_rgba(vec![0x38, 0xbd, 0xf8, 0xff], 1, 1)?;
+    let mut pixels = vec![0x18; 32 * 32 * 4];
+    for offset in (0..pixels.len()).step_by(4) {
+        pixels[offset + 1] = 0x1f;
+        pixels[offset + 2] = 0x2d;
+        pixels[offset + 3] = 0xff;
+    }
+    for y in 6..26 {
+        for x in 6..26 {
+            if x == 6 || x == 25 || y == 6 || y == 25 || (x > 10 && x < 22 && y > 10 && y < 22) {
+                let offset = (y * 32 + x) * 4;
+                pixels[offset..offset + 4].copy_from_slice(&[0x38, 0xbd, 0xf8, 0xff]);
+            }
+        }
+    }
+    let icon = Icon::from_rgba(pixels, 32, 32)?;
     let tray = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
         .with_tooltip("Focus on Work")
@@ -160,24 +172,30 @@ fn install_callbacks(ui: &AppWindow, socket: PathBuf, config_path: PathBuf) {
                 ui.set_status_text(error.into());
                 return;
             }
-            match request(&start_socket, start_request) {
-                Ok(response) if response.ok => {
-                    ui.set_status_text("Focus session started".into());
-                    let _ = Notification::new()
-                        .summary("Focus on Work")
-                        .body("Focus session started.")
-                        .show();
-                    update_status(&ui, response.session);
-                }
-
-                Ok(response) => ui.set_status_text(
-                    response
-                        .error
-                        .unwrap_or_else(|| "Could not start session".into())
-                        .into(),
-                ),
-                Err(error) => ui.set_status_text(format!("Daemon unavailable: {error}").into()),
-            }
+            let ui_weak = ui.as_weak();
+            let request_socket = start_socket.clone();
+            thread::spawn(move || {
+                let result = request(&request_socket, start_request);
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(ui) = ui_weak.upgrade() {
+                        match result {
+                            Ok(response) if response.ok => {
+                                ui.set_status_text("Focus session started".into());
+                                update_status(&ui, response.session);
+                            }
+                            Ok(response) => ui.set_status_text(
+                                response
+                                    .error
+                                    .unwrap_or_else(|| "Could not start session".into())
+                                    .into(),
+                            ),
+                            Err(error) => {
+                                ui.set_status_text(format!("Daemon unavailable: {error}").into())
+                            }
+                        }
+                    }
+                });
+            });
         }
     });
 
@@ -185,16 +203,16 @@ fn install_callbacks(ui: &AppWindow, socket: PathBuf, config_path: PathBuf) {
     let status_socket = socket.clone();
     ui.on_refresh_status(move || {
         if let Some(ui) = status_weak.upgrade() {
-            match request(&status_socket, Request::Status) {
-                Ok(response) if response.ok => update_status(&ui, response.session),
-                Ok(response) => ui.set_status_text(
-                    response
-                        .error
-                        .unwrap_or_else(|| "Status request failed".into())
-                        .into(),
-                ),
-                Err(error) => ui.set_status_text(format!("Daemon unavailable: {error}").into()),
-            }
+            let ui_weak = ui.as_weak();
+            let request_socket = status_socket.clone();
+            thread::spawn(move || {
+                let result = request(&request_socket, Request::Status);
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(ui) = ui_weak.upgrade() {
+                        apply_response(&ui, result, "Status request failed");
+                    }
+                });
+            });
         }
     });
 
@@ -226,8 +244,12 @@ fn install_callbacks(ui: &AppWindow, socket: PathBuf, config_path: PathBuf) {
             };
             match serde_json::to_vec_pretty(&config)
                 .map_err(std::io::Error::other)
-                .and_then(|bytes| fs::write(&export_path, bytes))
-            {
+                .and_then(|bytes| {
+                    if let Some(parent) = export_path.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
+                    fs::write(&export_path, bytes)
+                }) {
                 Ok(()) => ui.set_status_text(
                     format!("Configuration saved to {}", export_path.display()).into(),
                 ),
@@ -282,7 +304,7 @@ fn install_callbacks(ui: &AppWindow, socket: PathBuf, config_path: PathBuf) {
             ui.set_lock_enabled(!ui.get_lock_enabled());
             ui.set_status_text(
                 if ui.get_lock_enabled() {
-                    "Settings locked for 10 minutes"
+                    "Settings locked; editing controls are disabled"
                 } else {
                     "Settings unlocked"
                 }
@@ -294,6 +316,12 @@ fn install_callbacks(ui: &AppWindow, socket: PathBuf, config_path: PathBuf) {
 
 fn request(socket: &PathBuf, request: Request) -> Result<Response, String> {
     let mut stream = UnixStream::connect(socket).map_err(|error| error.to_string())?;
+    stream
+        .set_read_timeout(Some(Duration::from_millis(500)))
+        .map_err(|error| error.to_string())?;
+    stream
+        .set_write_timeout(Some(Duration::from_millis(500)))
+        .map_err(|error| error.to_string())?;
     serde_json::to_writer(&mut stream, &request).map_err(|error| error.to_string())?;
     stream.write_all(b"\n").map_err(|error| error.to_string())?;
     let mut line = String::new();
@@ -301,6 +329,27 @@ fn request(socket: &PathBuf, request: Request) -> Result<Response, String> {
         .read_line(&mut line)
         .map_err(|error| error.to_string())?;
     serde_json::from_str(&line).map_err(|error| error.to_string())
+}
+
+fn apply_response(ui: &AppWindow, result: Result<Response, String>, fallback: &str) {
+    match result {
+        Ok(response) if response.ok => update_status(ui, response.session),
+        Ok(response) => {
+            ui.set_status_text(response.error.unwrap_or_else(|| fallback.into()).into())
+        }
+        Err(error) => ui.set_status_text(format!("Daemon unavailable: {error}").into()),
+    }
+}
+
+fn config_path() -> PathBuf {
+    if let Some(path) = env::var_os("FOW_GUI_CONFIG") {
+        return PathBuf::from(path);
+    }
+    let base = env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
+        .unwrap_or_else(|| PathBuf::from(".config"));
+    base.join("focus-on-work/config.json")
 }
 
 fn update_status(ui: &AppWindow, session: Option<Session>) {
