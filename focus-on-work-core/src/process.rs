@@ -30,6 +30,50 @@ pub struct ProcessDescription {
     pub executable: Option<PathBuf>,
 }
 
+pub struct ProcessTerminator {
+    system: System,
+}
+
+impl ProcessTerminator {
+    pub fn new() -> Self {
+        Self {
+            system: System::new_all(),
+        }
+    }
+
+    pub fn terminate_matching(&mut self, entries: &[String], daemon_pid: Option<u32>) {
+        let own_pid = std::process::id();
+        if validate_app_entries(entries).is_err() {
+            return;
+        }
+        self.system.refresh_processes(ProcessesToUpdate::All, true);
+        let initial_descriptions = process_descriptions(&self.system);
+        for pid in matching_pids(entries, &initial_descriptions, own_pid, daemon_pid) {
+            if let Some(process) = self.system.process(sysinfo::Pid::from_u32(pid)) {
+                let _ = process.kill_with(Signal::Term);
+            }
+        }
+        thread::sleep(Duration::from_millis(150));
+        self.system.refresh_processes(ProcessesToUpdate::All, true);
+        for pid in matching_pids(
+            entries,
+            &process_descriptions(&self.system),
+            own_pid,
+            daemon_pid,
+        ) {
+            if let Some(process) = self.system.process(sysinfo::Pid::from_u32(pid)) {
+                let _ = process.kill_with(Signal::Kill);
+            }
+        }
+    }
+}
+
+impl Default for ProcessTerminator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub fn validate_app_entry(entry: &str) -> Result<(), String> {
     if entry.len() < 3
         || entry.len() > 255
@@ -82,28 +126,6 @@ pub fn matching_pids(
         })
         .map(|process| process.pid)
         .collect()
-}
-
-pub fn terminate_matching(entries: &[String], daemon_pid: Option<u32>) {
-    let own_pid = std::process::id();
-    if validate_app_entries(entries).is_err() {
-        return;
-    }
-    let mut system = System::new_all();
-    system.refresh_processes(ProcessesToUpdate::All, true);
-    let initial_descriptions = process_descriptions(&system);
-    for pid in matching_pids(entries, &initial_descriptions, own_pid, daemon_pid) {
-        if let Some(process) = system.process(sysinfo::Pid::from_u32(pid)) {
-            let _ = process.kill_with(Signal::Term);
-        }
-    }
-    thread::sleep(Duration::from_millis(150));
-    system.refresh_processes(ProcessesToUpdate::All, true);
-    for pid in matching_pids(entries, &process_descriptions(&system), own_pid, daemon_pid) {
-        if let Some(process) = system.process(sysinfo::Pid::from_u32(pid)) {
-            let _ = process.kill_with(Signal::Kill);
-        }
-    }
 }
 
 fn process_descriptions(system: &System) -> Vec<ProcessDescription> {

@@ -164,6 +164,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
     info!("daemon started");
+    let mut process_terminator = process::ProcessTerminator::new();
     while !stopping.load(Ordering::Relaxed) {
         let mut state = current
             .lock()
@@ -174,7 +175,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             {
                 warn!(%error, "could not repair managed hosts block");
             }
-            process::terminate_matching(&active.apps, Some(std::process::id()));
+            process_terminator.terminate_matching(&active.apps, Some(std::process::id()));
             if !active.is_active(session::now_unix()) {
                 if let Err(error) = hosts::remove_block(&config.hosts) {
                     warn!(%error, "could not remove expired hosts block");

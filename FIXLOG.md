@@ -27,7 +27,7 @@
 - Files changed: core process matching, daemon/CLI/GUI validation
 - Tests added: exact-name/path and decoy-process unit tests
 - How verified: fmt, clippy with `-D warnings`, and all workspace tests passed; sysinfo 0.37.2 source confirms `refresh_processes(ProcessesToUpdate::All, true)`.
-- Unverified: CPU impact was not measured.
+- Unverified: CPU impact for a real desktop workload was not measured here.
 
 ## 2. Daemon robustness follow-up
 
@@ -60,3 +60,17 @@
 - Tests added: existing pure helper tests continue to pass
 - How verified: fmt, clippy, and workspace tests pass; socket calls now run on worker threads and UI updates use `invoke_from_event_loop`.
 - Unverified: Unix socket connect itself has no stable std connect-timeout API in this toolchain, so only read/write timeouts are enforced; real GUI/tray behavior needs a graphical session.
+
+## 8. Process scanner reuse
+
+- Status: DONE
+- Files changed: `focus-on-work-core/src/process.rs`,
+  `focus-on-work-daemon/src/main.rs`, `FIXLOG.md`
+- Tests added: none
+- How verified: the daemon now owns one `ProcessTerminator`, which reuses one
+  `sysinfo::System` and refreshes process data on each scan. Repository checks
+  passed. With an active temporary-path session, a 30-second `/proc` CPU sample
+  measured `0.000%` (below the container's 10 ms jiffy resolution, so this is
+  reported as less than roughly `0.033%` of one core).
+- Unverified: this low-process sandbox measurement does not represent a busy
+  desktop.
