@@ -71,10 +71,10 @@
 - How verified: the daemon now owns one `ProcessTerminator`, which reuses one
   `sysinfo::System` and refreshes process data on each scan. Repository checks
   passed. With an active temporary-path session, a 30-second `/proc` CPU sample
-  measured `0.000%` (below the container's 10 ms jiffy resolution, so this is
-  reported as less than roughly `0.033%` of one core).
-- Unverified: this low-process sandbox measurement does not represent a busy
-  desktop.
+  measured `13.494%` of one core (405 jiffies at HZ=100). This is the actual
+  measurement from this container, not a desktop benchmark.
+- Unverified: the container's process count and workload differ from a normal
+  desktop, so this number is not a universal performance guarantee.
 
 ## 9. Cleanup: nested lockfile
 
